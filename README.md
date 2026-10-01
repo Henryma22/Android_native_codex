@@ -54,17 +54,20 @@ Android local runtime
 
 ### 真机效果
 
-以下截图来自 Android ARM64 真机 `6cb21282` 的 Release 应用，展示 workspace 卡片、最近会话分组和新建 session 入口：
+以下截图来自 Android ARM64 真机 `6cb21282` 的 Release 应用。使用固定宽度双栏展示，避免原始手机截图纵向铺满 README：
 
-![Android Codex 首页](docs/release/screenshots/home.png)
+<table>
+  <tr>
+    <td align="center"><img src="docs/release/screenshots/home.png" width="320" alt="Android Codex 首页" /></td>
+    <td align="center"><img src="docs/release/screenshots/thread.jpg" width="320" alt="Android Codex 真实 thread 与工具执行" /></td>
+  </tr>
+  <tr>
+    <td align="center">workspace / session 首页</td>
+    <td align="center">真实 thread、用量、Root、工具执行与结果</td>
+  </tr>
+</table>
 
-截图仅用于展示布局，不包含 API key、access token、keystore 或设备认证信息。截图中的 workspace/session 名称来自本地验收数据。
-
-当前设备上的真实 session 列表和能力验证记录：
-
-![Android Codex session 能力展示](docs/release/screenshots/thread.png)
-
-该图展示了 workspace 下的真实 session 卡片、请求摘要、工具能力检查结果和 session 状态；它不是静态 mock 页面。
+截图仅用于展示真实布局和能力，不包含 API key、access token、keystore 或设备认证信息；它们不是静态 mock 页面。
 
 ## 构建
 
