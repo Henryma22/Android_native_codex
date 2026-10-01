@@ -27,6 +27,10 @@ CODEX_RELEASE_STORE_FILE, CODEX_RELEASE_STORE_PASSWORD, CODEX_RELEASE_KEY_ALIAS,
 
 No keystore, password, API key, session export or device data is included in this repository. A public GitHub Release must be rebuilt with the maintainer's production key, run the APK verifier and publish the resulting SHA-256 alongside the APK.
 
+## Screenshots
+
+The repository README includes two real-device screenshots: the workspace/session home screen and the current session capability/status view. They are stored under `docs/release/screenshots/` and contain no credentials or signing material.
+
 ## Known limits
 
 - ARM64 Android and a working KernelSU/PRoot environment are required for the full local runtime.
