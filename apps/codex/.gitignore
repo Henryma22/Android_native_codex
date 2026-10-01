@@ -1,0 +1,60 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Local Codex runtime input; never commit the large executable.
+/android/app/src/main/jniLibs/**/libcodex.so
+
+# Cross-compiled ARM64 PRoot assets are reproducible build inputs and are
+# supplied from the verified local toolchain when packaging the APK.
+/android/app/src/main/jniLibs/**/libcodex_proot.so
+/android/app/src/main/jniLibs/**/libcodex_proot_loader.so
+/android/app/src/main/jniLibs/**/libcodex_host_trampoline.so
+/android/app/src/main/jniLibs/**/libcodex_worker_guard.so
+/android/app/src/main/jniLibs/**/libcodex_root_read_broker.so
+/android/app/src/main/jniLibs/**/*.tmp
+
+# Widget Preview related
+.widget_preview/

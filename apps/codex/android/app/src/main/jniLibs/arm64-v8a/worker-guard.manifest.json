@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "component": "codex-proot-worker-guard",
+  "target": "arm64-v8a",
+  "androidApi": 24,
+  "ndk": "29.0.13846066",
+  "sha256": "aff19de013a31225ddb4d2105dbc41331aced59ecbac066e25513117fb8a8fe3",
+  "filename": "libcodex_worker_guard.so"
+}

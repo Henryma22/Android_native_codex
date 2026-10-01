@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "component": "codex-proot-loader",
+  "version": "5.1.107.94",
+  "source": "https://github.com/termux/proot.git",
+  "commit": "58c3b42849fac502c6c60a45c4d2a82da9e9f8d4",
+  "target": "arm64-v8a",
+  "androidApi": 24,
+  "ndk": "29.0.13846066",
+  "sha256": "10f7746a739bf4c535816fd479c4e192b50f0b1f2cb87cfe42f5923ced7f7020",
+  "filename": "libcodex_proot_loader.so"
+}

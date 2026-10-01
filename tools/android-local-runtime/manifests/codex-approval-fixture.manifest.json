@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "product": "codex",
+  "version": "1.0.0",
+  "abi": "arm64-v8a",
+  "source": "repository://tools/android-local-runtime/fixtures/codex-approval-runtime",
+  "sha256": "0cc273e44d0ec1b6a331fe425f030ba37720234e517e0132fc9a28a2cb76bec9",
+  "license": "internal-test-fixture",
+  "package": "codex-approval-fixture@1.0.0",
+  "packageRoot": "codex-approval-runtime",
+  "entrypoint": "codex-approval-runtime/bin/codex",
+  "companionFiles": [
+    {
+      "path": "codex-approval-runtime/codex-package.json",
+      "sha256": "1c52ebd4de32f87273c24f1d9a47e852e7fcb07a4184c0eb8a660bc4fc233847",
+      "sizeBytes": 157
+    }
+  ],
+  "bundleStatus": "device-protocol-fixture"
+}

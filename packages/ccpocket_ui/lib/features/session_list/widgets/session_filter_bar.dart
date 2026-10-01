@@ -1,0 +1,331 @@
+import 'package:flutter/material.dart';
+
+import '../../../l10n/app_localizations.dart';
+import '../../../models/messages.dart';
+import '../../../theme/app_theme.dart';
+
+class SessionFilterBar extends StatelessWidget {
+  final SessionDisplayMode displayMode;
+  final VoidCallback onToggleDisplayMode;
+  final bool groupRecentSessions;
+  final VoidCallback onToggleRecentGrouping;
+  final List<({String path, String name})> projects;
+  final String? currentProjectFilter;
+  final ValueChanged<String?> onProjectFilterChanged;
+  final bool namedOnly;
+  final VoidCallback onToggleNamed;
+
+  const SessionFilterBar({
+    super.key,
+    required this.displayMode,
+    required this.onToggleDisplayMode,
+    required this.groupRecentSessions,
+    required this.onToggleRecentGrouping,
+    required this.projects,
+    required this.currentProjectFilter,
+    required this.onProjectFilterChanged,
+    required this.namedOnly,
+    required this.onToggleNamed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildDisplayModeDropdown(context),
+          const SizedBox(width: 8),
+          _buildGroupingToggle(context),
+          const SizedBox(width: 8),
+          const SizedBox(width: 8),
+          if (projects.isNotEmpty) ...[
+            _buildProjectDropdown(context),
+            const SizedBox(width: 8),
+          ],
+          _buildNamedToggle(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGroupingToggle(BuildContext context) {
+    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    return _ActionChip(
+      key: const ValueKey('recent_grouping_toggle'),
+      icon: groupRecentSessions
+          ? Icons.account_tree_outlined
+          : Icons.view_list_outlined,
+      label: groupRecentSessions
+          ? (zh ? '已分组' : 'Grouped')
+          : (zh ? '列表' : 'List'),
+      tooltip: zh ? '切换最近会话分组' : 'Toggle recent session grouping',
+      onTap: onToggleRecentGrouping,
+      isActive: !groupRecentSessions,
+    );
+  }
+
+  Widget _buildDisplayModeDropdown(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final label = switch (displayMode) {
+      SessionDisplayMode.first => l.sessionDisplayModeFirst,
+      SessionDisplayMode.last => l.sessionDisplayModeLast,
+      SessionDisplayMode.summary => l.sessionDisplayModeSummary,
+    };
+
+    return _ActionChip(
+      key: const ValueKey('recent_display_mode_toggle'),
+      icon: Icons.visibility_outlined,
+      label: label,
+      tooltip: l.tooltipDisplayMode,
+      onTap: onToggleDisplayMode,
+    );
+  }
+
+  Widget _buildProjectDropdown(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final currentProject = projects
+        .where((p) => p.path == currentProjectFilter)
+        .firstOrNull;
+
+    return _DropdownChip<String?>(
+      key: const ValueKey('recent_project_filter'),
+      icon: Icons.folder_outlined,
+      label: currentProject != null ? currentProject.name : l.allProjects,
+      tooltip: l.tooltipProjectFilter,
+      items: [
+        (value: null, label: l.allProjects),
+        ...projects.map((p) => (value: p.path, label: p.name)),
+      ],
+      onSelected: onProjectFilterChanged,
+      isActive: currentProjectFilter != null,
+    );
+  }
+
+  Widget _buildNamedToggle(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final appColors = theme.extension<AppColors>()!;
+
+    return Tooltip(
+      key: const ValueKey('recent_named_only_toggle'),
+      message: l.tooltipNamedOnly,
+      child: Material(
+        color: namedOnly ? cs.primaryContainer : cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(16),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onToggleNamed,
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 48),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: namedOnly
+                    ? cs.primaryContainer
+                    : cs.outlineVariant.withValues(alpha: 0.5),
+              ),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.label_outlined,
+                  size: 14,
+                  color: namedOnly
+                      ? cs.onPrimaryContainer
+                      : appColors.subtleText,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  l.named,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: namedOnly
+                        ? cs.onPrimaryContainer
+                        : appColors.subtleText,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String? tooltip;
+  final VoidCallback onTap;
+  final bool isActive;
+
+  const _ActionChip({
+    super.key,
+    required this.icon,
+    required this.label,
+    this.tooltip,
+    required this.onTap,
+    this.isActive = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final appColors = theme.extension<AppColors>()!;
+
+    Widget chip = Material(
+      color: isActive ? cs.primaryContainer : cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 48),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: isActive
+                  ? cs.primaryContainer
+                  : cs.outlineVariant.withValues(alpha: 0.5),
+            ),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 14,
+                color: isActive ? cs.onPrimaryContainer : appColors.subtleText,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: isActive
+                      ? cs.onPrimaryContainer
+                      : appColors.subtleText,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (tooltip != null) {
+      return Tooltip(message: tooltip!, child: chip);
+    }
+    return chip;
+  }
+}
+
+class _DropdownChip<T> extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String? tooltip;
+  final List<({T value, String label})> items;
+  final ValueChanged<T> onSelected;
+  final bool isActive;
+
+  const _DropdownChip({
+    super.key,
+    required this.icon,
+    required this.label,
+    this.tooltip,
+    required this.items,
+    required this.onSelected,
+    this.isActive = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final appColors = theme.extension<AppColors>()!;
+
+    Widget chip = MenuAnchor(
+      builder: (context, controller, child) {
+        return Material(
+          color: isActive ? cs.primaryContainer : cs.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(16),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () {
+              if (controller.isOpen) {
+                controller.close();
+              } else {
+                controller.open();
+              }
+            },
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 48),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: isActive
+                      ? cs.primaryContainer
+                      : cs.outlineVariant.withValues(alpha: 0.5),
+                ),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    icon,
+                    size: 14,
+                    color: isActive
+                        ? cs.onPrimaryContainer
+                        : appColors.subtleText,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: isActive
+                          ? cs.onPrimaryContainer
+                          : appColors.subtleText,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.arrow_drop_down,
+                    size: 16,
+                    color: isActive
+                        ? cs.onPrimaryContainer
+                        : appColors.subtleText,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+      menuChildren: items.map((item) {
+        return MenuItemButton(
+          onPressed: () => onSelected(item.value),
+          child: Text(item.label),
+        );
+      }).toList(),
+    );
+
+    if (tooltip != null) {
+      return Tooltip(message: tooltip!, child: chip);
+    }
+    return chip;
+  }
+}

@@ -1,0 +1,97 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
+
+import '../../features/file_peek/file_path_syntax.dart';
+import '../../features/file_peek/markdown_link_handler.dart';
+import '../../theme/app_spacing.dart';
+import '../../theme/markdown_style.dart';
+
+// Re-parsing a growing Markdown document on every app-server delta can block
+// Flutter frames for long answers. Keep the live preview cheap after this
+// point; the completed assistant message is rendered with full Markdown.
+const _streamingMarkdownPreviewLimit = 2048;
+
+class StreamingBubble extends StatefulWidget {
+  final String text;
+  final FilePathTapCallback? onFileTap;
+
+  const StreamingBubble({super.key, required this.text, this.onFileTap});
+
+  @override
+  State<StreamingBubble> createState() => _StreamingBubbleState();
+}
+
+class _StreamingBubbleState extends State<StreamingBubble>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _cursorController;
+
+  @override
+  void initState() {
+    super.initState();
+    _cursorController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _cursorController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.text.isEmpty) return const SizedBox.shrink();
+    final fileSuffixes = const <String>{};
+    final Widget preview = widget.text.length > _streamingMarkdownPreviewLimit
+        ? Text(widget.text, style: Theme.of(context).textTheme.bodyMedium)
+        : MarkdownBody(
+            data: widget.text,
+            styleSheet: buildMarkdownStyle(context, variation: fileSuffixes),
+            onTapLink: buildChatMarkdownLinkHandler(
+              context,
+              onFileTap: widget.onFileTap,
+              knownPathSuffixes: fileSuffixes,
+            ),
+            inlineSyntaxes: [
+              if (widget.onFileTap != null) ...[
+                FilePathSyntax(knownPathSuffixes: fileSuffixes),
+                BareFilePathSyntax(knownPathSuffixes: fileSuffixes),
+              ],
+              ...colorCodeInlineSyntaxes,
+            ],
+            builders: {
+              if (widget.onFileTap != null)
+                'filePath': FilePathBuilder(onTap: widget.onFileTap),
+              ...markdownBuilders,
+            },
+          );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        vertical: AppSpacing.bubbleMarginV,
+        horizontal: AppSpacing.bubbleMarginH,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          preview,
+          AnimatedBuilder(
+            animation: _cursorController,
+            builder: (context, child) {
+              return Opacity(
+                opacity: _cursorController.value,
+                child: const Text(
+                  '\u258D',
+                  style: TextStyle(fontSize: 16, height: 1),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}

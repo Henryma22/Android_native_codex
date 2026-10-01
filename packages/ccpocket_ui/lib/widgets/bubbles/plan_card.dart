@@ -1,0 +1,229 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
+
+import '../../features/file_peek/file_path_syntax.dart';
+import '../../features/file_peek/markdown_link_handler.dart';
+import '../../theme/app_spacing.dart';
+import '../../theme/markdown_style.dart';
+
+/// A visually distinct card for rendering implementation plans inline in chat.
+///
+/// Shows a preview of the plan text with a header and optional "View Full Plan"
+/// button when the content exceeds [_maxPreviewHeight].
+class PlanCard extends StatelessWidget {
+  final String planText;
+  final VoidCallback onViewFullPlan;
+  final FilePathTapCallback? onFileTap;
+
+  /// Lines threshold below which the full plan is shown without a button.
+  static const int _shortPlanLineThreshold = 10;
+
+  /// Max height for the preview area before fade-out is applied.
+  static const double _maxPreviewHeight = 200;
+
+  const PlanCard({
+    super.key,
+    required this.planText,
+    required this.onViewFullPlan,
+    this.onFileTap,
+  });
+
+  bool get _isLongPlan => planText.split('\n').length > _shortPlanLineThreshold;
+
+  int get _sectionCount {
+    return RegExp(r'^#{1,3}\s', multiLine: true).allMatches(planText).length;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return GestureDetector(
+      onTap: _isLongPlan ? onViewFullPlan : null,
+      child: Container(
+        margin: const EdgeInsets.symmetric(
+          vertical: AppSpacing.bubbleMarginV,
+          horizontal: AppSpacing.bubbleMarginH,
+        ),
+        decoration: BoxDecoration(
+          color: cs.primary.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+          border: Border.all(color: cs.primary.withValues(alpha: 0.25)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _PlanHeader(sectionCount: _sectionCount),
+            Divider(height: 1, color: cs.primary.withValues(alpha: 0.15)),
+            _PlanBody(
+              planText: planText,
+              isLongPlan: _isLongPlan,
+              onFileTap: onFileTap,
+            ),
+            if (_isLongPlan) _PlanFooter(onViewFullPlan: onViewFullPlan),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PlanHeader extends StatelessWidget {
+  final int sectionCount;
+
+  const _PlanHeader({required this.sectionCount});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final zh = Localizations.localeOf(context).languageCode == 'zh';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
+        children: [
+          Icon(Icons.assignment, size: 18, color: cs.primary),
+          const SizedBox(width: 8),
+          Text(
+            zh ? '实施计划' : 'Implementation Plan',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: cs.primary,
+            ),
+          ),
+          const Spacer(),
+          if (sectionCount > 0)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: cs.primary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                zh ? '$sectionCount 个部分' : '$sectionCount sections',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                  color: cs.primary,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlanBody extends StatelessWidget {
+  final String planText;
+  final bool isLongPlan;
+  final FilePathTapCallback? onFileTap;
+
+  const _PlanBody({
+    required this.planText,
+    required this.isLongPlan,
+    this.onFileTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final fileSuffixes = const <String>{};
+    final markdownWidget = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: MarkdownBody(
+        data: planText,
+        selectable: true,
+        styleSheet: buildMarkdownStyle(context),
+        onTapLink: buildChatMarkdownLinkHandler(
+          context,
+          onFileTap: onFileTap,
+          knownPathSuffixes: fileSuffixes,
+        ),
+        inlineSyntaxes: [
+          if (onFileTap != null) ...[
+            FilePathSyntax(knownPathSuffixes: fileSuffixes),
+            BareFilePathSyntax(knownPathSuffixes: fileSuffixes),
+          ],
+          ...colorCodeInlineSyntaxes,
+        ],
+        builders: {
+          if (onFileTap != null) 'filePath': FilePathBuilder(onTap: onFileTap),
+          ...markdownBuilders,
+        },
+      ),
+    );
+
+    if (!isLongPlan) return markdownWidget;
+
+    return ClipRect(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          maxHeight: PlanCard._maxPreviewHeight,
+        ),
+        child: ShaderMask(
+          shaderCallback: (bounds) => LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.white,
+              Colors.white,
+              Colors.white.withValues(alpha: 0),
+            ],
+            stops: const [0.0, 0.7, 1.0],
+          ).createShader(bounds),
+          blendMode: BlendMode.dstIn,
+          child: SingleChildScrollView(
+            physics: const NeverScrollableScrollPhysics(),
+            child: markdownWidget,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlanFooter extends StatelessWidget {
+  final VoidCallback onViewFullPlan;
+
+  const _PlanFooter({required this.onViewFullPlan});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final zh = Localizations.localeOf(context).languageCode == 'zh';
+
+    return InkWell(
+      key: const ValueKey('view_full_plan_button'),
+      onTap: onViewFullPlan,
+      borderRadius: const BorderRadius.vertical(
+        bottom: Radius.circular(AppSpacing.cardRadius),
+      ),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(color: cs.primary.withValues(alpha: 0.15)),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.unfold_more, size: 16, color: cs.primary),
+            const SizedBox(width: 4),
+            Text(
+              zh ? '查看完整计划' : 'View Full Plan',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: cs.primary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

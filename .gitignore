@@ -1,0 +1,78 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+**/.gradle/
+**/build/
+**/__pycache__/
+
+# Environment
+.env
+.env.local
+.env.*
+!.env.example
+!.env.template
+
+# Secrets / signing keys / certificates
+*.pem
+*.key
+*.crt
+*.cer
+*.p8
+*.p12
+*.mobileprovision
+*.jks
+*.keystore
+key.properties
+keystore.properties
+*service-account*.json
+*firebase-adminsdk*.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Flutter build outputs
+**/.dart_tool/
+**/.packages
+**/.pub-cache/
+**/.pub/
+**/build/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+
+# TypeScript
+*.tsbuildinfo
+
+# Coverage
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Playwright CLI
+.playwright-cli/
+
+# Web preview artifacts
+web-preview.png
+
+# Codex investigation artifacts
+.codex-tmp/
+
+# Local verification fixture repos
+tmp/verification/issue54-path/
+
+# Local release and device evidence; regenerate instead of committing binaries.
+artifacts/
+tmp/
+*.apk
+*.aab
+*.hprof

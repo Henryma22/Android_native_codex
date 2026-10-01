@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://codex.local/schemas/android-local-rootfs-manifest-1.json",
+  "title": "Independent Android Codex ARM64 rootfs manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "artifact",
+    "target",
+    "debian",
+    "components",
+    "sources",
+    "reproducibility",
+    "security",
+    "device_finalize"
+  ],
+  "properties": {
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "const": "codex-android-local-rootfs" },
+        "version": { "const": 1 }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["filename", "format", "sha256", "bytes", "members", "regular_files", "unpacked_bytes"],
+      "properties": {
+        "filename": { "type": "string", "pattern": "^[^/\\\\]+\\.tar\\.gz$" },
+        "format": { "const": "tar.gz" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "bytes": { "type": "integer", "minimum": 1 },
+        "members": { "type": "integer", "minimum": 1 },
+        "regular_files": { "type": "integer", "minimum": 1 },
+        "unpacked_bytes": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["os", "arch", "android_abi", "host_build", "execution_verification"],
+      "properties": {
+        "os": { "const": "linux" },
+        "arch": { "const": "arm64" },
+        "android_abi": { "const": "arm64-v8a" },
+        "host_build": { "const": "linux-x86_64" },
+        "execution_verification": { "const": "deferred-to-arm64-device" }
+      }
+    },
+    "debian": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["suite", "snapshot", "mirror", "arch", "variant", "foreign_second_stage", "keyring_sha256"],
+      "properties": {
+        "suite": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]+$" },
+        "snapshot": { "type": "string", "pattern": "^[0-9]{8}T[0-9]{6}Z$" },
+        "mirror": { "type": "string", "pattern": "^https://snapshot\\.debian\\.org/archive/debian/[0-9]{8}T[0-9]{6}Z/?$" },
+        "arch": { "const": "arm64" },
+        "variant": { "const": "minbase" },
+        "foreign_second_stage": { "const": true },
+        "keyring_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "components": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node", "codex"],
+      "properties": {
+        "node": { "$ref": "#/$defs/node" },
+        "codex": { "$ref": "#/$defs/codex" }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "url", "immutable"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "url": { "type": "string", "minLength": 1 },
+          "immutable": { "type": "string", "minLength": 1 },
+          "sha256": { "$ref": "#/$defs/sha256" }
+        }
+      }
+    },
+    "reproducibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["archive_mtime", "numeric_owner", "production_install", "versions_independent"],
+      "properties": {
+        "archive_mtime": { "const": "1970-01-01T00:00:00Z" },
+        "numeric_owner": { "const": "0:0" },
+        "production_install": { "const": "direct-verified-tarballs" },
+        "versions_independent": { "const": true }
+      }
+    },
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["archive_check", "rejected"],
+      "properties": {
+        "archive_check": { "const": "archive_safety.py" },
+        "rejected": {
+          "type": "array",
+          "const": ["absolute-or-traversal-paths", "special-files", "setuid-setgid", "capability-xattrs", "world-writable"]
+        }
+      }
+    },
+    "device_finalize": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["script", "second_stage", "checks"],
+      "properties": {
+        "script": { "const": "device/proot-finalize-rootfs.sh" },
+        "second_stage": { "const": "/debootstrap/debootstrap --second-stage" },
+        "checks": {
+          "type": "array",
+          "const": ["node-version", "codex-version", "rootfs-policy"]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "sha256"],
+      "properties": {
+        "url": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "platform", "arch", "source_url", "sha256", "install_prefix"],
+      "properties": {
+        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "platform": { "const": "linux" },
+        "arch": { "const": "arm64" },
+        "source_url": { "type": "string", "pattern": "^https://nodejs\\.org/dist/v" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "install_prefix": { "const": "/opt/node" }
+      }
+    },
+    "codex": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["package", "requested_version", "resolved_version", "platform", "arch", "source_url", "sha256", "integrity", "install_prefix", "bin"],
+      "properties": {
+        "package": { "const": "@openai/codex" },
+        "requested_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+-linux-arm64$" },
+        "resolved_version": { "type": "string", "minLength": 1 },
+        "platform": { "const": "linux" },
+        "arch": { "const": "arm64" },
+        "source_url": { "type": "string", "pattern": "^https://registry\\.npmjs\\.org/" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "integrity": { "type": "string", "pattern": "^sha512-[A-Za-z0-9+/]+={0,2}$" },
+        "install_prefix": { "const": "/opt/codex" },
+        "bin": { "const": "codex" }
+      }
+    }
+  }
+}

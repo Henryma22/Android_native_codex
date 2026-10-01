@@ -1,0 +1,10 @@
+name: syntax_highlight
+description: Lightweight fallback for the presentation-only CC Pocket UI.
+publish_to: none
+
+environment:
+  sdk: ^3.13.0
+
+dependencies:
+  flutter:
+    sdk: flutter

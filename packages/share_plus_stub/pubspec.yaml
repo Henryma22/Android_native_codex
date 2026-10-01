@@ -1,0 +1,10 @@
+name: share_plus
+description: Local no-op share surface for the presentation-only CC Pocket UI.
+publish_to: none
+
+environment:
+  sdk: ^3.13.0
+
+dependencies:
+  flutter:
+    sdk: flutter

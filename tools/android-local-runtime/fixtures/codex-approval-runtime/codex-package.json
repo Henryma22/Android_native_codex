@@ -1,0 +1,7 @@
+{
+  "layoutVersion": 1,
+  "version": "1.0.0",
+  "target": "aarch64-unknown-linux-musl",
+  "variant": "codex-approval-fixture",
+  "entrypoint": "bin/codex"
+}

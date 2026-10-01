@@ -1,0 +1,194 @@
+#!/bin/sh
+# codex-guest-admin-version=3
+#
+# Debian package command adapter for the Linux/PRoot guest. Under the real
+# Root PRoot identity, sudo is a pass-through because the worker is already
+# Android UID 0; apt then modifies only the Linux guest rootfs. Under App UID
+# identity, the helper downloads package/dependency archives and extracts them
+# into a writable home prefix without executing maintainer scripts.
+
+set -eu
+
+PREFIX=/home/codex/.local/codex-pkgs
+STATE_DIR="$PREFIX/state"
+STATE_FILE="$STATE_DIR/installed"
+DOWNLOAD_DIR="$PREFIX/downloads"
+CACHE_DIR="$PREFIX/apt-cache"
+LISTS_DIR="$CACHE_DIR/lists"
+SOURCE_LIST="$PREFIX/sources.list"
+
+usage() {
+  echo "Codex sudo supports: sudo apt install [--yes] PACKAGE..." >&2
+  exit 2
+}
+
+fail() {
+  echo "Codex guest packages: $*" >&2
+  exit 1
+}
+
+ensure_directory() {
+  path=$1
+  [ ! -L "$path" ] || fail "package path must not be a symlink: $path"
+  if [ ! -d "$path" ]; then
+    mkdir "$path" || fail "cannot create package directory: $path"
+  fi
+  [ -d "$path" ] && [ ! -L "$path" ] || \
+    fail "package directory is unavailable: $path"
+}
+
+[ "$#" -gt 0 ] || usage
+guest_uid=$(/usr/bin/id -u 2>/dev/null) || fail "cannot verify the PRoot guest identity"
+if [ "$guest_uid" = 0 ]; then
+  exec "$@"
+fi
+[ "$guest_uid" = 1000 ] || {
+  echo "Codex guest packages: unsupported PRoot guest identity $guest_uid" >&2
+  exit 77
+}
+
+[ "$#" -ge 2 ] || usage
+case "$1" in
+  apt|apt-get) ;;
+  *) usage ;;
+esac
+shift
+
+action=
+packages=
+for argument in "$@"; do
+  case "$argument" in
+    install)
+      [ -z "$action" ] || usage
+      action=install
+      ;;
+    -y|--yes|--assume-yes|--no-install-recommends)
+      ;;
+    --)
+      usage
+      ;;
+    -*|''|.|..|*[!A-Za-z0-9+.-]*)
+      usage
+      ;;
+    *)
+      [ -n "$action" ] || usage
+      packages="$packages $argument"
+      ;;
+  esac
+done
+
+[ "$action" = install ] || usage
+[ -n "$packages" ] || usage
+
+# Never let a stale/hostile symlink redirect package state out of the guest
+# home. The prefix is mounted from this app's private runtime directory.
+for path in /home /home/codex; do
+  [ -d "$path" ] && [ ! -L "$path" ] || \
+    fail "guest home directory is unavailable: $path"
+done
+ensure_directory /home/codex/.local
+ensure_directory "$PREFIX"
+ensure_directory "$STATE_DIR"
+ensure_directory "$DOWNLOAD_DIR"
+ensure_directory "$CACHE_DIR"
+ensure_directory "$CACHE_DIR/archives"
+ensure_directory "$CACHE_DIR/archives/partial"
+ensure_directory "$LISTS_DIR"
+ensure_directory "$LISTS_DIR/partial"
+ensure_directory "$PREFIX/usr"
+ensure_directory "$PREFIX/usr/bin"
+ensure_directory "$PREFIX/usr/sbin"
+ensure_directory "$PREFIX/usr/lib"
+ensure_directory "$PREFIX/etc"
+ensure_directory "$PREFIX/etc/apt"
+
+[ ! -L "$STATE_FILE" ] || fail "installed state must not be a symlink"
+if [ -e "$STATE_FILE" ]; then
+  [ -f "$STATE_FILE" ] || fail "installed state is not a regular file"
+fi
+[ ! -L "$SOURCE_LIST" ] || fail "apt source list must not be a symlink"
+if [ -e "$SOURCE_LIST" ]; then
+  [ -f "$SOURCE_LIST" ] || fail "apt source list is not a regular file"
+fi
+
+# Keep the finalized image read-only: APT's index files and downloads live in
+# the App-UID-owned prefix. The Debian snapshot is pinned by the rootfs.
+if [ -f /etc/apt/sources.list ]; then
+  sed 's#^deb https://#deb http://#' /etc/apt/sources.list > "$SOURCE_LIST"
+else
+  printf '%s\n' \
+    'deb http://snapshot.debian.org/archive/debian/20260821T000000Z bookworm main' \
+    > "$SOURCE_LIST"
+fi
+
+for list in /var/lib/apt/lists/*; do
+  [ -d "$list" ] && continue
+  [ ! -L "$list" ] || fail "bundled apt list must not be a symlink: $list"
+  [ -f "$list" ] || fail "bundled apt list is not a regular file: $list"
+  destination="$LISTS_DIR/${list##*/}"
+  [ ! -L "$destination" ] || fail "user apt list must not be a symlink: $destination"
+  if [ -e "$destination" ]; then
+    [ -f "$destination" ] || fail "user apt list is not a regular file: $destination"
+  fi
+  /usr/bin/cp "$list" "$destination"
+done
+
+for package in $packages; do
+  if [ -f "$STATE_FILE" ] && grep -F -x -q "$package" "$STATE_FILE"; then
+    echo "Codex guest packages: $package is already installed"
+    continue
+  fi
+
+  package_dir="$DOWNLOAD_DIR/$package"
+  ensure_directory "$package_dir"
+  ensure_directory "$package_dir/partial"
+  for old_archive in "$package_dir"/*.deb; do
+    [ -e "$old_archive" ] || [ -L "$old_archive" ] || continue
+    [ -f "$old_archive" ] && [ ! -L "$old_archive" ] || \
+      fail "package archive is not a regular file: $old_archive"
+    rm -f "$old_archive"
+  done
+
+  /usr/bin/apt-get \
+    -o Dir::Etc::sourcelist="$SOURCE_LIST" \
+    -o Dir::Etc::sourceparts=- \
+    -o Dir::State::lists="$LISTS_DIR" \
+    -o Dir::Cache="$CACHE_DIR" \
+    -o Dir::Cache::archives="$package_dir" \
+    -o APT::Sandbox::User=root \
+    -o Acquire::Check-Valid-Until=false \
+    -o APT::Architecture=arm64 \
+    --yes --download-only --no-install-recommends \
+    install "$package"
+
+  archive_count=0
+  for candidate in "$package_dir"/*.deb; do
+    [ -e "$candidate" ] || [ -L "$candidate" ] || continue
+    [ -f "$candidate" ] && [ ! -L "$candidate" ] || \
+      fail "package archive is not a regular file: $candidate"
+    # dpkg-deb only extracts archive data; no package post-install script runs.
+    # The immutable Debian rootfs and Android host remain outside the target.
+    /usr/bin/dpkg-deb --extract "$candidate" "$PREFIX"
+    archive_count=$((archive_count + 1))
+  done
+  [ "$archive_count" -gt 0 ] || {
+    echo "Codex guest packages: APT did not download $package" >&2
+    exit 100
+  }
+
+  [ ! -L "$STATE_FILE" ] || fail "installed state became a symlink"
+  printf '%s\n' "$package" >> "$STATE_FILE"
+  for archive in "$package_dir"/*.deb; do
+    [ -f "$archive" ] && [ ! -L "$archive" ] && rm -f "$archive"
+  done
+  rmdir "$package_dir/partial" 2>/dev/null || true
+  if [ -e "$package_dir/lock" ] || [ -L "$package_dir/lock" ]; then
+    [ -f "$package_dir/lock" ] && [ ! -L "$package_dir/lock" ] || \
+      fail "package cache lock is not a regular file"
+    rm -f "$package_dir/lock"
+  fi
+  rmdir "$package_dir" 2>/dev/null || true
+  echo "Codex guest packages: installed $package and its required dependencies in the writable guest prefix"
+done
+
+exit 0

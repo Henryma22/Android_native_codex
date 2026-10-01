@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "component": "codex-proot-host-trampoline",
+  "target": "arm64-v8a",
+  "androidApi": 24,
+  "ndk": "29.0.13846066",
+  "static": true,
+  "sha256": "17fb03672f15940f3d0367c0b5186f5e33f23ff1a1be5a19be3e20cc74d64a8e",
+  "filename": "libcodex_host_trampoline.so"
+}

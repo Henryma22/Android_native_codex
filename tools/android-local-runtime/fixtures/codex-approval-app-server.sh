@@ -1,0 +1,77 @@
+#!/system/bin/sh
+
+# Deterministic protocol fixture for device UI acceptance.
+#
+# It is intentionally not a Codex runtime and never contacts a model. It
+# implements only the JSON-RPC messages needed to exercise the new app's
+# file-change preview, approval, and host-file handoff. The caller must run it
+# with a workspace cwd containing README.md.
+
+if [ "${1-}" = "--version" ]; then
+  printf '%s\n' 'codex-approval-fixture 1.0.0'
+  exit 0
+fi
+
+extract_numeric_id() {
+  printf '%s\n' "$1" | sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p' | head -n 1
+}
+
+emit_initialize_result() {
+  printf '{"jsonrpc":"2.0","id":%s,"result":{"serverInfo":{"name":"codex-approval-fixture","version":"1"}}}\n' "$1"
+}
+
+emit_thread_result() {
+  printf '{"jsonrpc":"2.0","id":%s,"result":{"thread":{"id":"fixture-thread"}}}\n' "$1"
+}
+
+emit_resume_ack() {
+  printf '%s\n' '{"jsonrpc":"2.0","method":"item/agentMessage/delta","params":{"delta":"The deterministic fixture accepted thread/resume for fixture-thread."}}'
+}
+
+emit_turn_started() {
+  printf '%s\n' '{"jsonrpc":"2.0","method":"turn/started","params":{"turn":{"id":"fixture-turn"}}}'
+}
+
+emit_file_change_request() {
+  printf '%s\n' '{"jsonrpc":"2.0","id":"approval-1","method":"item/fileChange/requestApproval","params":{"changes":[{"path":"README.md","kind":"update","proposedContent":"# codex approval fixture\nagent fixture applied\n"}]}}'
+}
+
+emit_turn_completed() {
+  printf '%s\n' '{"jsonrpc":"2.0","method":"item/agentMessage/delta","params":{"delta":"The deterministic fixture applied the approved README change."}}'
+  printf '%s\n' '{"jsonrpc":"2.0","method":"turn/completed","params":{"turn":{"id":"fixture-turn","status":"completed"}}}'
+}
+
+turn_request_id=''
+while IFS= read -r line; do
+  case "$line" in
+    *'"method":"initialize"'*)
+      emit_initialize_result "$(extract_numeric_id "$line")"
+      ;;
+    *'"method":"thread/start"'*)
+      emit_thread_result "$(extract_numeric_id "$line")"
+      ;;
+    *'"method":"thread/resume"'*)
+      emit_thread_result "$(extract_numeric_id "$line")"
+      emit_resume_ack
+      ;;
+    *'"method":"turn/start"'*)
+      turn_request_id="$(extract_numeric_id "$line")"
+      emit_turn_started
+      emit_file_change_request
+      ;;
+    *'"id":"approval-1"'*'"decision":"accept"'*)
+      printf '%s\n' '# codex approval fixture' 'agent fixture applied' > README.md
+      emit_turn_completed
+      printf '{"jsonrpc":"2.0","id":%s,"result":{"turnId":"fixture-turn"}}\n' "$turn_request_id"
+      ;;
+    *'"id":"approval-1"'*'"decision":"decline"'*)
+      printf '%s\n' '{"jsonrpc":"2.0","method":"turn/aborted","params":{"turn":{"id":"fixture-turn"}}}'
+      printf '{"jsonrpc":"2.0","id":%s,"result":{"turnId":"fixture-turn"}}\n' "$turn_request_id"
+      ;;
+    *'"method":"turn/interrupt"'*)
+      printf '%s\n' '{"jsonrpc":"2.0","method":"turn/interrupted","params":{"turn":{"id":"fixture-turn"}}}'
+      ;;
+    *'"method":"initialized"'*)
+      ;;
+  esac
+done

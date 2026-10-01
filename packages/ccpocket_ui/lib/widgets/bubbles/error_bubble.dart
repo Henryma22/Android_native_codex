@@ -1,0 +1,548 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../../l10n/app_localizations.dart';
+import '../../models/messages.dart';
+import '../../theme/app_spacing.dart';
+import '../../theme/app_theme.dart';
+import '../../utils/structured_error_inference.dart';
+
+/// Maps errorCode to a localized title for the error bubble header.
+String? _errorTitle(String? errorCode, AppLocalizations l) {
+  final isChinese = l.localeName.startsWith('zh');
+  return switch (errorCode) {
+    'auth_login_required' ||
+    'auth_token_expired' ||
+    'auth_api_error' => isChinese ? '认证错误' : 'Authentication Error',
+    'codex_auth_required' => isChinese ? '需要 Codex 登录' : 'Codex Authentication Error',
+    'codex_cli_not_found' => isChinese ? '未安装 Codex CLI' : 'Codex CLI Not Installed',
+    'path_not_allowed' => isChinese ? '路径不允许' : 'Path Not Allowed',
+    'git_not_available' => l.gitUnavailableTitle,
+    'runtime_update_required' =>
+      isChinese ? '需要更新本地运行时' : 'Local Runtime Update Required',
+    'auto_mode_unavailable' =>
+      isChinese ? '自动模式不可用' : 'Auto Mode Unavailable',
+    'codex_warning' => isChinese ? 'Codex 警告' : 'Codex Warning',
+    _ => null,
+  };
+}
+
+/// Maps errorCode to a short remedy hint shown below the message.
+String? _errorHint(String? errorCode, AppLocalizations l) {
+  final isChinese = l.localeName.startsWith('zh');
+  return switch (errorCode) {
+    'auth_login_required' ||
+    'auth_token_expired' ||
+    'auth_api_error' ||
+    'codex_auth_required' => isChinese
+        ? '请在本地设置中完成 Codex 登录'
+        : 'Complete Codex login in Local Settings',
+    'codex_cli_not_found' =>
+      isChinese ? '请安装本地 Codex 运行时后重试' : 'Install the local Codex runtime, then retry',
+    'path_not_allowed' =>
+      isChinese ? '请检查本地工作区权限' : 'Check local workspace permissions',
+    'git_not_available' => l.gitUnavailableHint,
+    'runtime_update_required' => isChinese
+        ? '请在设置中更新本地 Codex 运行时'
+        : 'Update the local Codex runtime in Settings',
+    'auto_mode_unavailable' => isChinese
+        ? '请在此处使用可用的 Codex 模式'
+        : 'Use the available Codex mode here',
+    _ => null,
+  };
+}
+
+/// Copyable command for the hint tap action.
+String? _copyableCommand(String? errorCode) {
+  return switch (errorCode) {
+    'auth_login_required' || 'auth_token_expired' => 'Open Codex login in Settings',
+    'runtime_update_required' => 'Update the local Codex runtime in Settings',
+    'codex_cli_not_found' =>
+      'curl -fsSL https://chatgpt.com/codex/install.sh | sh',
+    _ => null,
+  };
+}
+
+bool _isCodexAuthError(String? errorCode) {
+  return errorCode == 'auth_login_required' ||
+      errorCode == 'auth_token_expired';
+}
+
+bool _isApiKeyRequired(String? errorCode) {
+  return errorCode == 'auth_api_error';
+}
+
+/// Whether the errorCode represents a non-critical warning (amber style).
+bool _isWarning(String? errorCode) {
+  return errorCode == 'git_not_available' ||
+      errorCode == 'runtime_update_required' ||
+      errorCode == 'auto_mode_unavailable' ||
+      errorCode == 'codex_warning';
+}
+
+class ErrorBubble extends StatelessWidget {
+  final ErrorMessage message;
+  const ErrorBubble({super.key, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    final appColors = Theme.of(context).extension<AppColors>()!;
+    final resolvedErrorCode = inferStructuredErrorCode(
+      message: message.message,
+      explicitErrorCode: message.errorCode,
+    );
+    final l = AppLocalizations.of(context);
+    final title = _errorTitle(resolvedErrorCode, l);
+    final hint = _errorHint(resolvedErrorCode, l);
+    final hasStructured = title != null;
+    final isWarn = _isWarning(resolvedErrorCode);
+
+    final bubbleColor = isWarn
+        ? appColors.warningBubble
+        : appColors.errorBubble;
+    final borderColor = isWarn
+        ? appColors.warningBubbleBorder
+        : appColors.errorBubbleBorder;
+    final textColor = isWarn ? appColors.warningText : appColors.errorText;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(
+        vertical: AppSpacing.bubbleMarginV,
+        horizontal: AppSpacing.bubbleMarginH,
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+      decoration: BoxDecoration(
+        color: bubbleColor,
+        borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+        border: Border.all(color: borderColor),
+      ),
+      child: hasStructured
+          ? _isCodexAuthError(resolvedErrorCode)
+                ? _CodexAuthErrorCard(
+                    textColor: textColor,
+                    title: l.authErrorTitle,
+                    body: l.authErrorBody,
+                    primaryCommandLabel: l.authErrorPrimaryCommandLabel,
+                    primaryCommand: 'Open Codex login in Settings',
+                    secondaryCommandLabel: l.authErrorSecondaryCommandLabel,
+                    secondaryCommand: '/login',
+                    alternativeLabel: l.authErrorAlternativeLabel,
+                    alternativeCommand: 'Open Codex login in Settings',
+                    helpLabel: l.authHelpButton,
+                  )
+                : _isApiKeyRequired(resolvedErrorCode)
+                ? _LocalAuthRequiredCard(textColor: textColor)
+                : _buildStructured(context, title, hint, textColor, isWarn)
+          : _buildSimple(textColor),
+    );
+  }
+
+  /// Original simple layout for errors without errorCode (backward compat).
+  Widget _buildSimple(Color textColor) {
+    return Row(
+      children: [
+        _icon(textColor, false),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            message.message,
+            style: TextStyle(color: textColor, fontSize: 13),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Structured layout with title, message body, and remedy hint.
+  Widget _buildStructured(
+    BuildContext context,
+    String title,
+    String? hint,
+    Color textColor,
+    bool isWarn,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header row with icon and title
+        Row(
+          children: [
+            _icon(textColor, isWarn),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        // Message body
+        Text(
+          message.message,
+          style: TextStyle(
+            color: textColor.withValues(alpha: 0.85),
+            fontSize: 12,
+          ),
+        ),
+        // Remedy hint
+        if (hint != null) ...[
+          const SizedBox(height: 8),
+          _buildHint(context, textColor, hint),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildHint(BuildContext context, Color textColor, String hint) {
+    final command = _copyableCommand(
+      inferStructuredErrorCode(
+        message: message.message,
+        explicitErrorCode: message.errorCode,
+      ),
+    );
+    final child = Container(
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+      decoration: BoxDecoration(
+        color: textColor.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.lightbulb_outline,
+            size: 14,
+            color: textColor.withValues(alpha: 0.7),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              hint,
+              style: TextStyle(
+                color: textColor.withValues(alpha: 0.7),
+                fontSize: 12,
+              ),
+            ),
+          ),
+          if (command != null)
+            Icon(Icons.copy, size: 12, color: textColor.withValues(alpha: 0.5)),
+        ],
+      ),
+    );
+
+    if (command != null) {
+      return GestureDetector(
+        onTap: () {
+          Clipboard.setData(ClipboardData(text: command));
+          final zh = Localizations.localeOf(context).languageCode == 'zh';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(zh ? '已复制“$command”' : 'Copied "$command"'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        },
+        child: child,
+      );
+    }
+    return child;
+  }
+
+  Widget _icon(Color textColor, bool isWarn) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: textColor.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Icon(
+        isWarn ? Icons.info_outline : Icons.error_outline,
+        size: 14,
+        color: textColor,
+      ),
+    );
+  }
+}
+
+class _CodexAuthErrorCard extends StatelessWidget {
+  final Color textColor;
+  final String title;
+  final String body;
+  final String primaryCommandLabel;
+  final String primaryCommand;
+  final String secondaryCommandLabel;
+  final String secondaryCommand;
+  final String alternativeLabel;
+  final String alternativeCommand;
+  final String helpLabel;
+
+  const _CodexAuthErrorCard({
+    required this.textColor,
+    required this.title,
+    required this.body,
+    required this.primaryCommandLabel,
+    required this.primaryCommand,
+    required this.secondaryCommandLabel,
+    required this.secondaryCommand,
+    required this.alternativeLabel,
+    required this.alternativeCommand,
+    required this.helpLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            _AuthIcon(textColor: textColor),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          body,
+          style: TextStyle(
+            color: textColor.withValues(alpha: 0.92),
+            fontSize: 12,
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 10),
+        _AuthCommandRow(
+          textColor: textColor,
+          leadingLabel: primaryCommandLabel,
+          command: primaryCommand,
+        ),
+        const SizedBox(height: 6),
+        _AuthCommandRow(
+          textColor: textColor,
+          leadingLabel: secondaryCommandLabel,
+          command: secondaryCommand,
+        ),
+        const SizedBox(height: 10),
+        _AlternativeCommandHint(
+          textColor: textColor,
+          label: alternativeLabel,
+          command: alternativeCommand,
+        ),
+        const SizedBox(height: 10),
+        OutlinedButton.icon(
+          key: const ValueKey('auth_help_button'),
+          onPressed: () {
+            final zh = Localizations.localeOf(context).languageCode == 'zh';
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  zh
+                      ? '请打开设置完成 Codex 登录。'
+                      : 'Open Settings to complete Codex login.',
+                ),
+              ),
+            );
+          },
+          icon: const Icon(Icons.help_outline, size: 16),
+          label: Text(helpLabel),
+        ),
+      ],
+    );
+  }
+}
+
+class _LocalAuthRequiredCard extends StatelessWidget {
+  final Color textColor;
+
+  const _LocalAuthRequiredCard({required this.textColor});
+
+  @override
+  Widget build(BuildContext context) {
+    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            _AuthIcon(textColor: textColor),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                zh ? '需要 Codex 认证' : 'Codex authentication required',
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          zh ? '请打开设置在此设备上登录。' : 'Open Settings to sign in on this device.',
+          style: TextStyle(
+            color: textColor.withValues(alpha: 0.92),
+            fontSize: 12,
+            height: 1.4,
+          ),
+        ),
+      ],
+    );
+  }
+}
+class _AuthCommandRow extends StatelessWidget {
+  final Color textColor;
+  final String leadingLabel;
+  final String command;
+
+  const _AuthCommandRow({
+    required this.textColor,
+    required this.leadingLabel,
+    required this.command,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 64,
+          child: Text(
+            leadingLabel,
+            style: TextStyle(
+              color: textColor.withValues(alpha: 0.75),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        Expanded(
+          child: _CommandChip(
+            textColor: textColor,
+            command: command,
+            copyValue: command,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AlternativeCommandHint extends StatelessWidget {
+  final Color textColor;
+  final String label;
+  final String command;
+
+  const _AlternativeCommandHint({
+    required this.textColor,
+    required this.label,
+    required this.command,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: textColor.withValues(alpha: 0.7),
+            fontSize: 11,
+          ),
+        ),
+        const SizedBox(height: 6),
+        _CommandChip(
+          textColor: textColor,
+          command: command,
+          copyValue: command,
+        ),
+      ],
+    );
+  }
+}
+
+class _CommandChip extends StatelessWidget {
+  final Color textColor;
+  final String command;
+  final String copyValue;
+
+  const _CommandChip({
+    required this.textColor,
+    required this.command,
+    required this.copyValue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        Clipboard.setData(ClipboardData(text: copyValue));
+        final zh = Localizations.localeOf(context).languageCode == 'zh';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(zh ? '已复制“$copyValue”' : 'Copied "$copyValue"'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+        decoration: BoxDecoration(
+          color: textColor.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                command,
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 12,
+                  fontFamily: 'monospace',
+                ),
+              ),
+            ),
+            Icon(Icons.copy, size: 12, color: textColor.withValues(alpha: 0.5)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AuthIcon extends StatelessWidget {
+  final Color textColor;
+
+  const _AuthIcon({required this.textColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: textColor.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Icon(Icons.error_outline, size: 14, color: textColor),
+    );
+  }
+}

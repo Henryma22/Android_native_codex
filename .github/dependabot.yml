@@ -1,0 +1,12 @@
+version: 2
+updates:
+  - package-ecosystem: "pub"
+    directory: "/apps/codex"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "chore(ci)"
+    labels:
+      - "dependencies"
+    open-pull-requests-limit: 5
